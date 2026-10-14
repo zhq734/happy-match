@@ -56,6 +56,10 @@
   --jelly: rgba(244, 114, 182, 0.32);
   --jelly-border: rgba(236, 72, 153, 0.6);
 
+  --teddy-1: #c98a5a;
+  --teddy-2: #f0c39a;
+  --teddy-face: #4a2c1a;
+
   --accent: #ff5c8a;
   --accent-2: #7c3aed;
   --success: #16a34a;
@@ -97,6 +101,10 @@
   --ice-border: rgba(147, 197, 253, 0.8);
   --jelly: rgba(244, 114, 182, 0.24);
   --jelly-border: rgba(249, 168, 212, 0.7);
+
+  --teddy-1: #b87a4d;
+  --teddy-2: #e8b98f;
+  --teddy-face: #2b1a10;
 
   --accent: #ff7eb3;
   --accent-2: #a78bfa;
@@ -988,6 +996,43 @@ body {
   border-radius: 50% 50% 40% 40%;
   background: radial-gradient(circle at 40% 35%, #fff6e0, #f7c98b);
   filter: none;
+}
+
+/* 小熊方块：不参与颜色匹配，只能靠相邻消除或特殊糖果清除 */
+.tile.teddy .body {
+  background: radial-gradient(circle at 36% 28%, var(--teddy-2), var(--teddy-1) 70%);
+  border-radius: 44% 44% 40% 40%;
+  box-shadow: var(--shadow-soft), inset 0 -3px 7px color-mix(in srgb, var(--teddy-1) 45%, transparent),
+    inset 0 4px 8px color-mix(in srgb, var(--bg-primary) 65%, transparent);
+}
+
+/* 双耳：用两个径向渐变圆点表现，尺寸随格子自适应 */
+.tile.teddy .body::before {
+  content: '';
+  position: absolute;
+  inset: -8% 0 auto;
+  height: 100%;
+  background:
+    radial-gradient(circle at 22% 22%, var(--teddy-1) 0 26%, transparent 27%),
+    radial-gradient(circle at 78% 22%, var(--teddy-1) 0 26%, transparent 27%);
+}
+
+/* 面部：两只眼睛与鼻尖 */
+.tile.teddy .body::after {
+  content: '• •';
+  position: absolute;
+  inset: 12% 0 0;
+  display: grid;
+  place-items: center;
+  width: auto;
+  height: auto;
+  border-radius: 0;
+  background: none;
+  filter: none;
+  color: var(--teddy-face);
+  font-size: calc(var(--tile-size, 48px) * 0.34);
+  line-height: 1;
+  letter-spacing: 0.02em;
 }
 
 .tile.dragging {

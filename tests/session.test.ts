@@ -73,6 +73,30 @@ describe('GameSession 目标与胜负', () => {
 });
 
 describe('目标进度', () => {
+  it('小熊目标随消除增长并在达成后判定胜利', () => {
+    const level = makeLevel(6, 6, {
+      moves: 20,
+      objectives: [{ type: 'teddy', target: 3 }],
+    });
+    const session = new GameSession(level, 3);
+    setGrid(session.board, [
+      [3, 0, 1, -2, 2, 3],
+      [3, 1, 0, -2, 2, 0],
+      [2, 2, 0, -2, 1, 3],
+      [1, 3, 2, 0, 3, 1],
+      [2, 0, 1, 3, 2, 0],
+      [3, 1, 3, 2, 0, 2],
+    ]);
+    // 三只小熊竖向相邻，三消后依次连带清除，直接达成收集目标。
+    const result = session.play({ r: 0, c: 1 }, { r: 0, c: 2 });
+    expect(result.valid).toBe(true);
+    const progress = session.progress()[0];
+    expect(progress.type).toBe('teddy');
+    expect(progress.current).toBeGreaterThan(0);
+    expect(progress.done).toBe(true);
+    expect(session.currentStatus).toBe('won');
+  });
+
   it('收集类目标随消除增长并封顶', () => {
     const level = makeLevel(6, 6, {
       moves: 20,
@@ -151,6 +175,42 @@ describe('关卡配置', () => {
   it('至少包含四种不同玩法模式', () => {
     const modes = new Set(LEVELS.map((l) => l.mode));
     expect(modes.size).toBeGreaterThanOrEqual(4);
+  });
+
+  it('分数门槛足够高，单次消除无法直接过关', () => {
+    for (const level of LEVELS) {
+      const scoreObjective = level.objectives.find((o) => o.type === 'score');
+      if (scoreObjective) expect(scoreObjective.target).toBeGreaterThanOrEqual(2000);
+    }
+  });
+
+  it('包含消除小熊的关卡且配置了小熊产出概率', () => {
+    const teddyLevels = LEVELS.filter((l) => l.objectives.some((o) => o.type === 'teddy'));
+    expect(teddyLevels.length).toBeGreaterThanOrEqual(3);
+    for (const level of teddyLevels) {
+      expect(level.bearRate ?? 0).toBeGreaterThan(0);
+      expect(level.objectives.some((o) => o.type === 'teddy' && o.target > 0)).toBe(true);
+    }
+  });
+
+  it('获胜时至少获得一星，保证后续关卡可以解锁', () => {
+    const level = makeLevel(6, 6, {
+      moves: 20,
+      objectives: [{ type: 'score', target: 10 }],
+      starScores: [999999, 1000000, 1000001],
+    });
+    const session = new GameSession(level, 3);
+    setGrid(session.board, [
+      [0, 0, 1, 0, 1, 2],
+      [1, 2, 2, 2, 0, 1],
+      [2, 1, 0, 1, 2, 0],
+      [1, 2, 1, 0, 1, 2],
+      [0, 1, 2, 1, 0, 1],
+      [2, 0, 1, 2, 1, 0],
+    ]);
+    session.play({ r: 0, c: 2 }, { r: 0, c: 3 });
+    expect(session.currentStatus).toBe('won');
+    expect(session.stars()).toBeGreaterThanOrEqual(1);
   });
 
   it('按编号取关卡且越界回退', () => {

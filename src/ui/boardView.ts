@@ -165,6 +165,7 @@ export class BoardView {
   private tileClass(tile: Tile): string {
     const parts = ['tile'];
     if (tile.kind === 'ingredient') parts.push('ingredient');
+    else if (tile.kind === 'teddy') parts.push('teddy');
     else parts.push(`c${tile.color}`);
     if (tile.special !== 'none') parts.push(tile.special);
     return parts.join(' ');
@@ -184,6 +185,8 @@ export class BoardView {
     const byHeight = Math.floor(maxH / this.board.rows);
     this.cellSize = Math.max(24, Math.min(byWidth, byHeight, 96));
     this.gap = Math.max(2, Math.round(this.cellSize * 0.08));
+    // 供 CSS 计算与小熊面部等细节尺寸，保证不同屏幕下比例一致。
+    this.root.style.setProperty('--tile-size', `${this.cellSize}px`);
     this.root.style.width = `${this.cellSize * this.board.cols}px`;
     this.root.style.height = `${this.cellSize * this.board.rows}px`;
     this.resizeFxCanvas();
@@ -425,9 +428,12 @@ export class BoardView {
         node.classList.add('clearing');
         // 提前移除交互与过渡，避免消除节点继续参与命中测试与合成。
         node.style.pointerEvents = 'none';
-        const color = item.tile.kind === 'ingredient'
-          ? 'var(--brand-2)'
-          : `var(--candy-${item.tile.color})`;
+        const color =
+          item.tile.kind === 'ingredient'
+            ? 'var(--brand-2)'
+            : item.tile.kind === 'teddy'
+              ? 'var(--teddy-1)'
+              : `var(--candy-${item.tile.color})`;
         const special = item.tile.special;
         this.impactAt(item.pos.r, item.pos.c, color, special, special === 'none' ? 7 : 16);
         if (special !== 'none') this.beamAt(item.pos.r, item.pos.c, special, color);

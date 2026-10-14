@@ -124,6 +124,7 @@ export class HomeScreen {
       ['✨', '两颗特殊糖果交换会触发强力组合技，效果加倍。'],
       ['🎯', '不同关卡有不同目标：分数、收集、果冻、冰层与食材。'],
       ['🍰', '食材会从顶部掉落，需运到底部出口完成收集。'],
+      ['🧸', '部分关卡需要消除小熊：与小熊相邻的消除会把它一起带走。'],
     ];
     const list = el('div', { className: 'how-list' });
     for (const [icon, text] of items) {

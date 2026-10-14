@@ -9,8 +9,8 @@ export type Color = 0 | 1 | 2 | 3 | 4 | 5;
 /** 特殊糖果类型：普通 / 横向条 / 纵向条 / 包装（爆炸）/ 彩虹。 */
 export type Special = 'none' | 'row' | 'col' | 'wrap' | 'rainbow';
 
-/** 方块大类：糖果或食材。 */
-export type TileKind = 'candy' | 'ingredient';
+/** 方块大类：糖果、食材或小熊（小熊不参与颜色匹配，需靠相邻消除或特效清除）。 */
+export type TileKind = 'candy' | 'ingredient' | 'teddy';
 
 /** 棋盘上的一个方块。 */
 export interface Tile {
@@ -46,7 +46,7 @@ export interface Pos {
 export type GameMode = 'moves' | 'timed' | 'collect' | 'clear' | 'relax';
 
 /** 关卡目标类型。 */
-export type ObjectiveType = 'score' | 'collect' | 'jelly' | 'ice' | 'ingredient';
+export type ObjectiveType = 'score' | 'collect' | 'jelly' | 'ice' | 'ingredient' | 'teddy';
 
 /** 单条关卡目标。 */
 export interface LevelObjective {
@@ -77,6 +77,8 @@ export interface Level {
   starScores: [number, number, number];
   /** 掉落权重调整：值越高越容易出现该颜色。 */
   dropRate?: number;
+  /** 小熊方块产出概率（0~1），仅配置了 teddy 目标的关卡会使用。 */
+  bearRate?: number;
   /** 关卡提示文案。 */
   hint?: string;
 }

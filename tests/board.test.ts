@@ -4,6 +4,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { Board } from '../src/game/board';
+import { LEVELS } from '../src/game/levels';
 import { makeBoard, makeLevel, setGrid } from './helpers';
 
 describe('Board 初始化', () => {
@@ -110,6 +111,26 @@ describe('交换合法性', () => {
     expect(Board.isAdjacent({ r: 0, c: 0 }, { r: 0, c: 1 })).toBe(true);
     expect(Board.isAdjacent({ r: 0, c: 0 }, { r: 1, c: 1 })).toBe(false);
   });
+
+  it('包装糖单独交换不会被误判为合法（避免玩家卡死）', () => {
+    const board = makeBoard(makeLevel(6, 6), 1);
+    setGrid(
+      board,
+      [
+        [0, 1, 2, 0, 1, 2],
+        [1, 2, 0, 1, 2, 0],
+        [2, 0, 1, 2, 0, 1],
+        [0, 1, 2, 0, 1, 2],
+        [1, 2, 0, 1, 2, 0],
+        [2, 0, 1, 2, 0, 1],
+      ],
+      { '0,0': 'wrap' },
+    );
+    // 包装糖与普通糖交换既不形成三消，也不会触发组合技。
+    expect(board.isValidSwap({ r: 0, c: 0 }, { r: 0, c: 1 })).toBe(false);
+    const result = board.resolveSwap({ r: 0, c: 0 }, { r: 0, c: 1 });
+    expect(result.events).toHaveLength(0);
+  });
 });
 
 describe('消除结算', () => {
@@ -192,6 +213,65 @@ describe('消除结算', () => {
 });
 
 describe('特殊玩法机制', () => {
+  it('相邻消除会连带清除小熊并累计数量', () => {
+    const level = makeLevel(6, 6, { colors: 4 });
+    const board = makeBoard(level, 1);
+    setGrid(board, [
+      [3, 0, 1, -2, 2, 3],
+      [3, 1, 0, 1, 2, 0],
+      [2, 2, 0, 3, 1, 3],
+      [1, 3, 2, 0, 3, 1],
+      [2, 0, 1, 3, 2, 0],
+      [3, 1, 3, 2, 0, 2],
+    ]);
+    // 交换后第 2 列形成 0 0 0，与消除相邻的小熊会被连带清除。
+    const result = board.resolveSwap({ r: 0, c: 1 }, { r: 0, c: 2 });
+    expect(result.events.length).toBeGreaterThan(0);
+    expect(board.teddyCleared).toBeGreaterThan(0);
+  });
+
+  it('单次三消得分受到抑制，避免一两次消除就过关', () => {
+    const board = makeBoard(makeLevel(6, 6), 3);
+    setGrid(board, [
+      [0, 0, 1, 0, 1, 2],
+      [1, 2, 2, 2, 0, 1],
+      [2, 1, 0, 1, 2, 0],
+      [1, 2, 1, 0, 1, 2],
+      [0, 1, 2, 1, 0, 1],
+      [2, 0, 1, 2, 1, 0],
+    ]);
+    const result = board.resolveSwap({ r: 0, c: 2 }, { r: 0, c: 3 });
+    expect(result.gained).toBeGreaterThan(0);
+    // 单步得分应远低于第一关的过关分，避免一两次消除就通关。
+    expect(result.gained).toBeLessThan(LEVELS[0].objectives[0].target / 4);
+  });
+
+  it('深层连锁的分数倍率有上限，避免一次连锁刷出巨额分数', () => {
+    const board = makeBoard(makeLevel(8, 8), 11);
+    let maxGain = 0;
+    for (let seed = 1; seed <= 25; seed++) {
+      const probe = makeBoard(makeLevel(8, 8), seed * 7919);
+      for (let step = 0; step < 10; step++) {
+        let move: { a: { r: number; c: number }; b: { r: number; c: number } } | null = null;
+        for (let r = 0; r < probe.rows && !move; r++) {
+          for (let c = 0; c < probe.cols && !move; c++) {
+            for (const b of [
+              { r, c: c + 1 },
+              { r: r + 1, c },
+            ]) {
+              if (!probe.isPlayable(b.r, b.c)) continue;
+              if (probe.isValidSwap({ r, c }, b)) move = { a: { r, c }, b };
+            }
+          }
+        }
+        if (!move) break;
+        maxGain = Math.max(maxGain, probe.resolveSwap(move.a, move.b).gained);
+      }
+    }
+    expect(maxGain).toBeLessThan(6000);
+    expect(board).toBeTruthy();
+  });
+
   it('食材在出生点生成并向下掉落', () => {
     const level = makeLevel(4, 4, { layout: ['s...', '....', '....', '....'] });
     const board = makeBoard(level, 1);

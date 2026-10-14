@@ -24,7 +24,28 @@ export interface ClearStats {
   jellyCleared: number;
   iceCleared: number;
   ingredientsCollected: number;
+  teddyCleared: number;
   specialsCreated: number;
+}
+
+/** 单颗普通糖果的基础分。 */
+const BASE_TILE_SCORE = 25;
+/** 生成一颗特殊糖果的额外奖励分。 */
+const SPECIAL_CREATE_SCORE = 60;
+/** 组合技单颗方块的基础分。 */
+const COMBO_TILE_SCORE = 40;
+/** 连锁层级奖励上限：每深一层只额外增加 25% 得分，最多加成到 1.75 倍。 */
+const CASCADE_BONUS_STEP = 0.25;
+const CASCADE_BONUS_MAX_LEVEL = 3;
+
+/**
+ * 依据连锁层级计算得分倍率，采用封顶的线性奖励避免深层连锁刷出巨额分数。
+ * @param cascade 连锁层级，从 1 开始
+ * @returns 得分倍率
+ */
+function cascadeMultiplier(cascade: number): number {
+  const level = Math.max(0, Math.min(cascade - 1, CASCADE_BONUS_MAX_LEVEL));
+  return 1 + level * CASCADE_BONUS_STEP;
 }
 
 /** 特殊糖果激活时影响的格子集合。 */
@@ -42,6 +63,14 @@ export class Board {
   private readonly rng: Rng;
   private readonly colors: number;
   private readonly colorPool: Color[];
+  /** 小熊方块产出概率，0 表示该关卡不产出。 */
+  private readonly bearRate: number;
+  /** 关卡需要消除的小熊总数，用于控制场上小熊数量上限。 */
+  private readonly teddyGoal: number;
+  /** 已投放的小熊数量，保证总量不超过目标所需。 */
+  private teddySpawned = 0;
+  /** 布局中预置的小熊位置。 */
+  private readonly teddySeeds: Pos[] = [];
 
   /** 累计得分。 */
   score = 0;
@@ -51,6 +80,8 @@ export class Board {
   iceCleared = 0;
   /** 累计收集的食材数量。 */
   ingredientsCollected = 0;
+  /** 累计消除的小熊数量。 */
+  teddyCleared = 0;
   /** 各颜色累计收集数量。 */
   readonly colorCollected = [0, 0, 0, 0, 0, 0];
   /** 历史最大连锁层级。 */
@@ -67,8 +98,22 @@ export class Board {
     this.rng = rng;
     this.colors = Math.max(3, Math.min(6, level.colors));
     this.colorPool = Array.from({ length: this.colors }, (_, i) => i as Color);
+    this.teddyGoal = level.objectives
+      .filter((o) => o.type === 'teddy')
+      .reduce((sum, o) => sum + o.target, 0);
+    this.bearRate = this.resolveBearRate(level);
     this.buildCells(level);
     this.fillInitial();
+  }
+
+  /**
+   * 计算关卡的小熊产出概率，仅当关卡存在小熊目标时生效。
+   * @param level 关卡定义
+   * @returns 产出概率（0~0.2）
+   */
+  private resolveBearRate(level: Level): number {
+    if (this.teddyGoal <= 0) return 0;
+    return Math.max(0, Math.min(0.2, level.bearRate ?? 0.06));
   }
 
   /**
@@ -79,6 +124,7 @@ export class Board {
     for (let r = 0; r < this.rows; r++) {
       for (let c = 0; c < this.cols; c++) {
         const ch = level.layout?.[r]?.[c] ?? '.';
+        if (ch === 't') this.teddySeeds.push({ r, c });
         this.cells.push({
           hole: ch === '#',
           ice: ch === 'i' ? 1 : ch === 'I' ? 2 : 0,
@@ -161,6 +207,22 @@ export class Board {
   }
 
   /**
+   * 创建一只小熊方块。
+   * @returns 新小熊
+   */
+  private makeTeddy(): Tile {
+    return { id: this.nextId++, kind: 'teddy', color: -1, special: 'none' };
+  }
+
+  /**
+   * 按关卡概率决定是否生成本次的小熊方块。
+   * @returns 需要生成小熊时返回 true
+   */
+  private shouldSpawnTeddy(): boolean {
+    return this.bearRate > 0 && this.rng.next() < this.bearRate;
+  }
+
+  /**
    * 随机取一个颜色。
    * @returns 颜色
    */
@@ -196,7 +258,9 @@ export class Board {
       for (let c = 0; c < this.cols; c++) {
         const cell = this.cells[this.index(r, c)];
         if (cell.hole) continue;
-        cell.tile = this.makeCandy(this.safeRandomColor(r, c));
+        const isSeed = this.teddySeeds.some((p) => p.r === r && p.c === c);
+        cell.tile = isSeed ? this.makeTeddy() : this.makeCandy(this.safeRandomColor(r, c));
+        if (isSeed) this.teddySpawned++;
       }
     }
     let guard = 0;
@@ -225,6 +289,7 @@ export class Board {
       const t = this.tileAt(p.r, p.c);
       return !!t && t.kind === 'candy';
     });
+    // 洗牌时保留小熊与食材，只重排糖果颜色。
     for (const p of positions) {
       const cell = this.cells[this.index(p.r, p.c)];
       cell.tile = this.makeCandy(this.randomColor());
@@ -460,7 +525,21 @@ export class Board {
     while (queue.length > 0) {
       const p = queue.shift() as Pos;
       const tile = this.tileAt(p.r, p.c);
-      if (!tile || tile.special === 'none') continue;
+      if (!tile) continue;
+      // 被消除格相邻的小熊会被连带清除，作为独立于颜色匹配的收集玩法。
+      if (tile.special === 'none') {
+        const around: Pos[] = [
+          { r: p.r - 1, c: p.c },
+          { r: p.r + 1, c: p.c },
+          { r: p.r, c: p.c - 1 },
+          { r: p.r, c: p.c + 1 },
+        ];
+        for (const q of around) {
+          const neighbor = this.tileAt(q.r, q.c);
+          if (neighbor && neighbor.kind === 'teddy') push(q);
+        }
+        continue;
+      }
       const targets = this.specialTargets(p, tile.special, overrideColor);
       for (const t of targets) push(t);
     }
@@ -480,6 +559,7 @@ export class Board {
       jellyCleared: 0,
       iceCleared: 0,
       ingredientsCollected: 0,
+      teddyCleared: 0,
       specialsCreated: 0,
     };
 
@@ -495,6 +575,10 @@ export class Board {
       if (tile.kind === 'ingredient') {
         stats.ingredientsCollected++;
         this.ingredientsCollected++;
+      }
+      if (tile.kind === 'teddy') {
+        stats.teddyCleared++;
+        this.teddyCleared++;
       }
       if (cell.jelly > 0) {
         cell.jelly--;
@@ -523,8 +607,7 @@ export class Board {
       }
     }
 
-    const multiplier = cascade;
-    this.score += stats.clearedTiles * 60 * multiplier;
+    this.score += stats.clearedTiles * BASE_TILE_SCORE * cascadeMultiplier(cascade);
     this.maxCascade = Math.max(this.maxCascade, cascade);
     return stats;
   }
@@ -559,6 +642,8 @@ export class Board {
     }
 
     const remaining = { value: Math.max(0, ingredientTarget - this.ingredientsCollected) };
+    // 场上未消除的小熊加上剩余目标，决定还能投放多少只小熊，避免溢出。
+    const teddyRemaining = { value: this.teddyRemainingBudget() };
     for (let c = 0; c < this.cols; c++) {
       let segTop = 0;
       for (let r = 0; r <= this.rows; r++) {
@@ -570,6 +655,10 @@ export class Board {
           if (cell.spawn && remaining.value > 0) {
             cell.tile = this.makeIngredient();
             remaining.value--;
+          } else if (teddyRemaining.value > 0 && this.shouldSpawnTeddy()) {
+            cell.tile = this.makeTeddy();
+            teddyRemaining.value--;
+            this.teddySpawned++;
           } else {
             cell.tile = this.makeCandy(this.randomColor());
           }
@@ -577,6 +666,17 @@ export class Board {
         segTop = r + 1;
       }
     }
+  }
+
+  /**
+   * 计算仍可投放的小熊数量。
+   * 投放总量为目标数的两倍再加 4 只余量，避免因随机性导致小熊不足而卡关。
+   * @returns 还可投放的小熊数量
+   */
+  private teddyRemainingBudget(): number {
+    if (this.teddyGoal <= 0) return 0;
+    const budget = this.teddyGoal * 2 + 4;
+    return Math.max(0, budget - this.teddySpawned);
   }
 
   /**
@@ -612,7 +712,12 @@ export class Board {
     const tb = this.tileAt(b.r, b.c);
     if (!ta || !tb) return false;
     if (ta.kind === 'ingredient' || tb.kind === 'ingredient') return true;
-    if (ta.special !== 'none' || tb.special !== 'none') return true;
+    // 只有两颗特殊糖果（或任意一方为彩虹糖）交换才会触发组合技。
+    // 单颗条纹/包装糖直接交换不会自行引爆，必须同时形成三消才算合法，
+    // 否则会出现“提示可交换、实际无效”的卡死体验。
+    const bothSpecial = ta.special !== 'none' && tb.special !== 'none';
+    const hasRainbow = ta.special === 'rainbow' || tb.special === 'rainbow';
+    if (bothSpecial || hasRainbow) return true;
     this.swapTiles(a, b);
     const hasMatch = this.findMatchGroups().length > 0;
     this.swapTiles(a, b);
@@ -773,7 +878,7 @@ export class Board {
       const color: Color = raw >= 0 ? (raw as Color) : 0;
       cell.tile = this.makeCandy(color, item.special);
       stats.specialsCreated++;
-      this.score += 120 * cascade;
+      this.score += SPECIAL_CREATE_SCORE * cascadeMultiplier(cascade);
     }
 
     this.collapseAndRefill(ingredientTarget);
@@ -781,7 +886,9 @@ export class Board {
     return {
       cells: [...cleared.values()],
       cascade,
-      score: stats.clearedTiles * 60 * cascade,
+      score:
+        stats.clearedTiles * BASE_TILE_SCORE * cascadeMultiplier(cascade) +
+        stats.specialsCreated * SPECIAL_CREATE_SCORE * cascadeMultiplier(cascade),
       created,
       activated,
       removed,
@@ -843,7 +950,7 @@ export class Board {
     return {
       cells: [...cleared.values()],
       cascade: 1,
-      score: stats.clearedTiles * 90,
+      score: stats.clearedTiles * COMBO_TILE_SCORE,
       created: [],
       activated: [a, b],
       removed,

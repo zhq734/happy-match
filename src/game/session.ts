@@ -143,6 +143,9 @@ export class GameSession {
         case 'ingredient':
           current = this.board.ingredientsCollected;
           break;
+        case 'teddy':
+          current = this.board.teddyCleared;
+          break;
       }
       const capped = Math.min(current, obj.target);
       return {
@@ -213,6 +216,8 @@ export class GameSession {
     if (score >= s3) return 3;
     if (score >= s2) return 2;
     if (score >= s1) return 1;
+    // 已经通关时至少给一星，避免出现“过关却无法解锁下一关”的死锁。
+    if (this.status === 'won') return 1;
     return 0;
   }
 

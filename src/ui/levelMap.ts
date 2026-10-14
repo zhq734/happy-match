@@ -24,6 +24,7 @@ const OBJ_SUMMARY: Record<string, string> = {
   ice: '击碎冰层',
   ingredient: '送达食材',
   collect: '收集糖果',
+  teddy: '消除小熊',
 };
 
 /**

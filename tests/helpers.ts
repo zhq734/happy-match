@@ -44,6 +44,11 @@ export function setGrid(
     for (let c = 0; c < grid[r].length; c++) {
       const cell = board.cellAt(r, c) as Cell;
       const v = grid[r][c];
+      // -2 表示小熊方块，用于验证收集类玩法的清除逻辑。
+      if (v === -2) {
+        cell.tile = { id: id++, kind: 'teddy', color: -1, special: 'none' };
+        continue;
+      }
       if (v < 0) {
         cell.tile = null;
         continue;

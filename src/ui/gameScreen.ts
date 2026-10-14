@@ -24,6 +24,7 @@ const OBJ_ICON: Record<string, string> = {
   ice: '❄️',
   ingredient: '🍰',
   collect: '🍬',
+  teddy: '🧸',
 };
 
 /** 目标名称。 */
@@ -33,6 +34,7 @@ const OBJ_NAME: Record<string, string> = {
   ice: '冰层',
   ingredient: '食材',
   collect: '收集',
+  teddy: '小熊',
 };
 
 /** 结果回调。 */
@@ -312,7 +314,8 @@ export class GameScreen {
       },
     });
     const ratio = p.target > 0 ? Math.min(1, p.current / p.target) : 0;
-    const title = p.type === 'collect' ? `收集颜色` : (OBJ_NAME[p.type] ?? '目标');
+    const title =
+      p.type === 'collect' ? '收集颜色' : p.type === 'teddy' ? '消除小熊' : (OBJ_NAME[p.type] ?? '目标');
     const text = el('div', {
       className: 'obj-text',
       children: [
@@ -487,7 +490,12 @@ export class GameScreen {
 
     const objList = el('div', { className: 'obj-result-list' });
     for (const p of summary.progress) {
-      const name = p.type === 'collect' ? `收集 ${p.target} 个糖果` : `${OBJ_NAME[p.type]} ${p.target}`;
+      const name =
+        p.type === 'collect'
+          ? `收集 ${p.target} 个糖果`
+          : p.type === 'teddy'
+            ? `消除 ${p.target} 只小熊`
+            : `${OBJ_NAME[p.type]} ${p.target}`;
       objList.appendChild(
         el('div', {
           className: 'obj-result',

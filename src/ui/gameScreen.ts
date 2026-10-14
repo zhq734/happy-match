@@ -526,8 +526,11 @@ export class GameScreen {
           text: '下一关 →',
           onClick: () => {
             audio.play('click');
-            this.onExit();
-            window.dispatchEvent(new CustomEvent('happy-match:next-level'));
+            // 只派发下一关事件，由主控制器统一负责界面切换；
+            // 这里若先调用 onExit 会提前销毁当前会话，导致无法读取当前关卡编号。
+            window.dispatchEvent(
+              new CustomEvent<number>('happy-match:next-level', { detail: summary.levelId }),
+            );
           },
         }),
       );

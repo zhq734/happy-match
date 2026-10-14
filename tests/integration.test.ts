@@ -190,4 +190,38 @@ describe('应用集成冒烟测试', () => {
     expect(parsed.totalStars).toBe(0);
     expect(app.querySelectorAll('.level-card').length).toBe(LEVELS.length);
   });
+
+  it('结算弹窗点击“下一关”后应进入下一关而非重开当前关', async () => {
+    const app = await bootstrap();
+    [...app.querySelectorAll<HTMLButtonElement>('.home-actions .btn')]
+      .find((b) => b.textContent?.includes('开始游戏'))
+      ?.click();
+    await settle();
+    (app.querySelectorAll<HTMLButtonElement>('.level-card')[0]).click();
+    await settle(10);
+
+    // 直接将会话标记为通关，触发结算弹窗。
+    const instance = (
+      window as unknown as {
+        happyMatch: { game: { session: { forceEnd(status: 'won'): void } } };
+      }
+    ).happyMatch;
+    instance.game.session.forceEnd('won');
+    await settle(30);
+
+    const nextBtn = [...app.querySelectorAll<HTMLButtonElement>('.modal .btn')].find((b) =>
+      b.textContent?.includes('下一关'),
+    );
+    expect(nextBtn).toBeDefined();
+    nextBtn?.click();
+    await settle(12);
+
+    const game = (
+      window as unknown as {
+        happyMatch: { game: { currentLevel: { id: number } } };
+      }
+    ).happyMatch.game;
+    expect(game.currentLevel.id).toBe(2);
+    expect(app.querySelector('.topbar h2')?.textContent).toContain('果冻初现');
+  });
 });

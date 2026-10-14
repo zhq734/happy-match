@@ -60,7 +60,10 @@ class App {
 
   /** 绑定跨界面全局事件。 */
   private bindGlobalEvents(): void {
-    window.addEventListener('happy-match:next-level', () => this.goNextLevel());
+    window.addEventListener('happy-match:next-level', (e) => {
+      const levelId = (e as CustomEvent<number | undefined>).detail;
+      this.goNextLevel(levelId);
+    });
     window.addEventListener('happy-match:locked', (e) => {
       const id = (e as CustomEvent<number>).detail;
       this.toast(`第 ${id} 关尚未解锁，先完成上一关吧！`);
@@ -134,9 +137,12 @@ class App {
     }
   }
 
-  /** 进入下一关（结算弹窗点击“下一关”时触发）。 */
-  private goNextLevel(): void {
-    const current = this.game?.currentLevel.id ?? 0;
+  /**
+   * 进入下一关（结算弹窗点击“下一关”时触发）。
+   * @param currentLevelId 结算事件携带的当前关卡编号，缺省时回退读取当前会话
+   */
+  private goNextLevel(currentLevelId?: number): void {
+    const current = currentLevelId ?? this.game?.currentLevel.id ?? 0;
     const next = LEVELS.find((l) => l.id === current + 1);
     if (next) this.startLevel(next);
     else this.showMap();

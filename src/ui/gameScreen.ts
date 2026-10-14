@@ -62,6 +62,7 @@ export class GameScreen {
   private boardArea!: HTMLDivElement;
   private topbarTitle!: HTMLHeadingElement;
   private readonly onResize = (): void => this.view?.layout();
+  private resizeObserver: ResizeObserver | null = null;
 
   /**
    * 构造游戏界面。
@@ -86,6 +87,11 @@ export class GameScreen {
     this.root = el('section', { className: 'screen game-screen' });
     this.build();
     window.addEventListener('resize', this.onResize);
+    // 监听可用区域变化（HUD 换行、目标增减等），保证棋盘始终铺满空间。
+    if (typeof ResizeObserver !== 'undefined') {
+      this.resizeObserver = new ResizeObserver(() => this.view?.layout());
+      this.resizeObserver.observe(this.boardArea);
+    }
   }
 
   /** 构建界面结构。 */
@@ -206,7 +212,8 @@ export class GameScreen {
 
   /** 创建棋盘视图。 */
   private createBoardView(): void {
-    this.view = new BoardView(this.session.board, (a, b) => this.handleSwap(a, b));
+    // 用 boardArea 作为测量基准，避免棋盘尺寸自我锁死。
+    this.view = new BoardView(this.session.board, (a, b) => this.handleSwap(a, b), this.boardArea);
     const frame = el('div', { className: 'board-frame', children: [this.view.root] });
     clear(this.boardArea);
     this.boardArea.appendChild(frame);
@@ -582,6 +589,8 @@ export class GameScreen {
   dispose(): void {
     cancelAnimationFrame(this.rafId);
     window.removeEventListener('resize', this.onResize);
+    this.resizeObserver?.disconnect();
+    this.resizeObserver = null;
     this.view?.destroy();
     this.view = null;
     this.closeModal();

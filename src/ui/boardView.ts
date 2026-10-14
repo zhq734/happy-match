@@ -3,7 +3,7 @@
  * 创建者：zhenghq
  */
 import { Board } from '../game/board';
-import type { Cell, ClearEvent, Pos, Tile } from '../game/types';
+import type { Cell, ClearEvent, Pos, Special, Tile } from '../game/types';
 import { el, rand, sleep } from './dom';
 
 /** 一次交换的处理结果。 */
@@ -24,6 +24,7 @@ export type SwapHandler = (a: Pos, b: Pos) => SwapOutcome;
 export class BoardView {
   readonly root: HTMLDivElement;
   private readonly board: Board;
+  private readonly measureElement?: HTMLElement;
   private readonly tileLayer: HTMLDivElement;
   private readonly cellLayer: HTMLDivElement;
   private readonly fxLayer: HTMLDivElement;
@@ -41,10 +42,12 @@ export class BoardView {
    * 构造棋盘视图。
    * @param board 棋盘数据
    * @param onSwap 交换回调
+   * @param measureElement 用于测量可用空间的外部容器（可选）
    */
-  constructor(board: Board, onSwap: SwapHandler) {
+  constructor(board: Board, onSwap: SwapHandler, measureElement?: HTMLElement) {
     this.board = board;
     this.onSwap = onSwap;
+    this.measureElement = measureElement;
 
     this.cellLayer = el('div', { className: 'cell-layer' });
     this.tileLayer = el('div', { className: 'tile-layer' });
@@ -133,14 +136,17 @@ export class BoardView {
 
   /** 依据容器尺寸计算格子大小并刷新所有节点位置。 */
   layout(): void {
-    const wrap = this.root.parentElement;
-    const wrapWidth = wrap?.clientWidth ?? window.innerWidth;
-    const wrapHeight = wrap?.clientHeight ?? window.innerHeight;
-    const maxW = Math.max(180, Math.min(wrapWidth - 16, 620));
-    const maxH = Math.max(180, Math.min(wrapHeight - 16, 620));
+    // 必须测量棋盘外部真正可用的区域。若测量棋盘父级（.board-frame），
+    // 父级宽度会由棋盘自身内容撑开，形成“自我锁死”，棋盘永远无法放大。
+    const wrap = this.measureElement ?? this.root.parentElement?.parentElement;
+    const wrapWidth = wrap?.clientWidth || window.innerWidth;
+    const wrapHeight = wrap?.clientHeight || window.innerHeight;
+    // 预留外框 padding 与边框的余量，避免棋盘边缘被裁切。
+    const maxW = Math.max(180, wrapWidth - 28);
+    const maxH = Math.max(180, wrapHeight - 28);
     const byWidth = Math.floor(maxW / this.board.cols);
     const byHeight = Math.floor(maxH / this.board.rows);
-    this.cellSize = Math.max(24, Math.min(byWidth, byHeight, 76));
+    this.cellSize = Math.max(24, Math.min(byWidth, byHeight, 96));
     this.gap = Math.max(2, Math.round(this.cellSize * 0.08));
     this.root.style.width = `${this.cellSize * this.board.cols}px`;
     this.root.style.height = `${this.cellSize * this.board.rows}px`;
@@ -357,6 +363,9 @@ export class BoardView {
       if (event.cascade > 1) {
         this.banner(`${event.cascade} 连击！`);
       }
+      // 连锁越深，棋盘反馈越强，让连续消除有明显“打击感”。
+      const strong = event.cascade > 1 || event.removed.length >= 4;
+      if (strong) this.shake(event.cascade > 2 ? 'strong' : 'soft');
       for (const item of event.removed) {
         const node = this.tileNodes.get(item.tile.id);
         if (!node) continue;
@@ -365,7 +374,9 @@ export class BoardView {
         const color = item.tile.kind === 'ingredient'
           ? 'var(--brand-2)'
           : `var(--candy-${item.tile.color})`;
-        this.burstAt(item.pos.r, item.pos.c, color, item.tile.special === 'none' ? 6 : 12);
+        const special = item.tile.special;
+        this.impactAt(item.pos.r, item.pos.c, color, special, special === 'none' ? 7 : 16);
+        if (special !== 'none') this.beamAt(item.pos.r, item.pos.c, special, color);
         window.setTimeout(() => node.remove(), 320);
       }
       if (event.score > 0) {
@@ -374,6 +385,126 @@ export class BoardView {
       }
       await sleep(event.cascade > 1 ? 260 : 300);
     }
+  }
+
+  /**
+   * 在指定格子播放完整的消除冲击特效。
+   * @param r 行
+   * @param c 列
+   * @param colorVar 特效颜色
+   * @param special 方块特殊类型
+   * @param count 粒子数量
+   */
+  impactAt(r: number, c: number, colorVar: string, special: Special = 'none', count = 8): void {
+    const cx = c * this.cellSize + this.cellSize / 2;
+    const cy = r * this.cellSize + this.cellSize / 2;
+    const scale = special === 'wrap' ? 1.55 : special === 'rainbow' ? 1.8 : 1;
+
+    const flash = el('div', {
+      className: 'impact-flash',
+      style: {
+        left: `${cx}px`,
+        top: `${cy}px`,
+        width: `${this.cellSize * 1.1 * scale}px`,
+        height: `${this.cellSize * 1.1 * scale}px`,
+        background: `radial-gradient(circle, ${colorVar} 0%, transparent 68%)`,
+      },
+    });
+    const ring = el('div', {
+      className: 'impact-ring',
+      style: {
+        left: `${cx}px`,
+        top: `${cy}px`,
+        width: `${this.cellSize * scale}px`,
+        height: `${this.cellSize * scale}px`,
+        borderColor: colorVar,
+      },
+    });
+    this.fxLayer.appendChild(flash);
+    this.fxLayer.appendChild(ring);
+    window.setTimeout(() => flash.remove(), 460);
+    window.setTimeout(() => ring.remove(), 560);
+
+    const shardCount = special === 'none' ? 5 : 9;
+    for (let i = 0; i < shardCount; i++) {
+      const angle = (Math.PI * 2 * i) / shardCount + rand(-0.25, 0.25);
+      const dist = rand(this.cellSize * 0.4, this.cellSize * 1.05) * scale;
+      const shard = el('div', {
+        className: 'shard',
+        style: {
+          left: `${cx}px`,
+          top: `${cy}px`,
+          background: colorVar,
+          width: `${rand(5, 10)}px`,
+          height: `${rand(3, 6)}px`,
+          transform: `rotate(${rand(0, 360)}deg)`,
+        },
+      });
+      shard.style.setProperty('--dx', `${Math.cos(angle) * dist}px`);
+      shard.style.setProperty('--dy', `${Math.sin(angle) * dist}px`);
+      shard.style.setProperty('--rot', `${rand(-320, 320)}deg`);
+      this.fxLayer.appendChild(shard);
+      window.setTimeout(() => shard.remove(), 620);
+    }
+
+    this.burstAt(r, c, colorVar, count);
+  }
+
+  /**
+   * 为条纹、包装与彩虹糖绘制贯穿式光束或爆发特效。
+   * @param r 行
+   * @param c 列
+   * @param special 特殊类型
+   * @param colorVar 特效颜色
+   */
+  beamAt(r: number, c: number, special: Special, colorVar: string): void {
+    if (special === 'row' || special === 'col') {
+      const beam = el('div', {
+        className: `beam beam-${special}`,
+        style: {
+          background: `linear-gradient(90deg, transparent, ${colorVar}, transparent)`,
+        },
+      });
+      if (special === 'row') {
+        beam.style.top = `${r * this.cellSize + this.cellSize / 2}px`;
+        beam.style.left = '0';
+        beam.style.width = '100%';
+        beam.style.height = `${Math.max(6, this.cellSize * 0.16)}px`;
+      } else {
+        beam.style.left = `${c * this.cellSize + this.cellSize / 2}px`;
+        beam.style.top = '0';
+        beam.style.height = '100%';
+        beam.style.width = `${Math.max(6, this.cellSize * 0.16)}px`;
+        beam.style.background = `linear-gradient(180deg, transparent, ${colorVar}, transparent)`;
+      }
+      this.fxLayer.appendChild(beam);
+      window.setTimeout(() => beam.remove(), 560);
+      return;
+    }
+
+    const cx = c * this.cellSize + this.cellSize / 2;
+    const cy = r * this.cellSize + this.cellSize / 2;
+    const burst = el('div', {
+      className: `special-burst ${special}`,
+      style: {
+        left: `${cx}px`,
+        top: `${cy}px`,
+        borderColor: colorVar,
+      },
+    });
+    this.fxLayer.appendChild(burst);
+    window.setTimeout(() => burst.remove(), 620);
+  }
+
+  /**
+   * 让棋盘产生轻微震动，强化消除反馈。
+   * @param level 震动强度
+   */
+  private shake(level: 'soft' | 'strong'): void {
+    this.root.classList.remove('shake-soft', 'shake-strong');
+    void this.root.offsetWidth;
+    this.root.classList.add(level === 'strong' ? 'shake-strong' : 'shake-soft');
+    window.setTimeout(() => this.root.classList.remove('shake-soft', 'shake-strong'), 380);
   }
 
   /**

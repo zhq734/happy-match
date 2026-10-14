@@ -694,7 +694,6 @@ body {
   border: 2px solid var(--border-default);
   box-shadow: var(--shadow-card), var(--shadow-inner);
   padding: clamp(0.35rem, 1vw, 0.6rem);
-  backdrop-filter: blur(6px);
   max-width: 100%;
   max-height: 100%;
 }
@@ -814,8 +813,8 @@ body {
   height: 82%;
   position: relative;
   border-radius: 30% 70% 68% 32% / 40% 34% 66% 60%;
-  box-shadow: 0 3px 6px rgba(90, 40, 70, 0.28), inset 0 -4px 8px rgba(0, 0, 0, 0.14),
-    inset 0 5px 9px rgba(255, 255, 255, 0.65);
+  box-shadow: 0 3px 6px rgba(90, 40, 70, 0.24), inset 0 -3px 6px rgba(0, 0, 0, 0.12),
+    inset 0 4px 7px rgba(255, 255, 255, 0.6);
   display: grid;
   place-items: center;
   transition: transform 0.18s ease, filter 0.18s ease;
@@ -834,14 +833,13 @@ body {
 }
 
 .tile:hover .body {
-  transform: scale(1.07);
+  transform: scale(1.05);
 }
 
 .tile.selected .body {
-  transform: scale(1.16);
-  filter: brightness(1.14);
-  box-shadow: 0 0 0 3px var(--accent), 0 6px 14px rgba(120, 40, 90, 0.4),
-    inset 0 5px 9px rgba(255, 255, 255, 0.6);
+  transform: scale(1.12);
+  box-shadow: 0 0 0 3px var(--accent), 0 5px 12px rgba(120, 40, 90, 0.36),
+    inset 0 4px 7px rgba(255, 255, 255, 0.55);
 }
 
 .tile.spawning .body {
@@ -871,16 +869,13 @@ body {
 @keyframes tile-clear {
   0% {
     transform: scale(1);
-    filter: brightness(1) saturate(1);
   }
   30% {
     transform: scale(1.42) rotate(10deg);
-    filter: brightness(2.1) saturate(1.8) drop-shadow(0 0 12px rgba(255, 255, 255, 0.95));
   }
   100% {
     transform: scale(0.05) rotate(-26deg);
     opacity: 0;
-    filter: brightness(2.4) saturate(2);
   }
 }
 
@@ -956,17 +951,6 @@ body {
 .tile.wrap .body {
   box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.85), 0 0 14px rgba(255, 240, 150, 0.9),
     inset 0 5px 9px rgba(255, 255, 255, 0.6);
-  animation: wrap-glow 1.6s ease-in-out infinite;
-}
-
-@keyframes wrap-glow {
-  0%,
-  100% {
-    filter: brightness(1);
-  }
-  50% {
-    filter: brightness(1.22);
-  }
 }
 
 .tile.rainbow .body {
@@ -980,7 +964,6 @@ body {
     var(--candy-0)
   );
   border-radius: 50%;
-  animation: spin-rainbow 3.6s linear infinite;
 }
 
 .tile.rainbow .body::before {
@@ -989,12 +972,6 @@ body {
   inset: 26%;
   border-radius: 50%;
   background: radial-gradient(circle, var(--bg-primary), transparent 70%);
-}
-
-@keyframes spin-rainbow {
-  to {
-    transform: rotate(360deg);
-  }
 }
 
 .tile.ingredient .body {
@@ -1023,129 +1000,15 @@ body {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  overflow: visible;
+  overflow: hidden;
   z-index: 8;
+  contain: strict;
 }
 
-.spark {
+.fx-canvas {
   position: absolute;
-  width: 0.5rem;
-  height: 0.5rem;
-  border-radius: 50%;
-  box-shadow: 0 0 8px currentColor;
-  animation: spark-fly 0.68s cubic-bezier(0.15, 0.8, 0.3, 1) forwards;
-}
-
-@keyframes spark-fly {
-  from {
-    transform: translate(-50%, -50%) scale(1);
-    opacity: 1;
-  }
-  to {
-    transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(0.1);
-    opacity: 0;
-  }
-}
-
-/* 冲击波 / 闪光 / 碎片 / 贯穿光束 ---------------------------------------- */
-.impact-flash {
-  position: absolute;
-  border-radius: 50%;
-  transform: translate(-50%, -50%) scale(0.2);
-  mix-blend-mode: screen;
-  animation: impact-flash 0.44s ease-out forwards;
+  inset: 0;
   pointer-events: none;
-}
-
-@keyframes impact-flash {
-  0% { transform: translate(-50%, -50%) scale(0.15); opacity: 0; }
-  30% { transform: translate(-50%, -50%) scale(1); opacity: 0.95; }
-  100% { transform: translate(-50%, -50%) scale(1.7); opacity: 0; }
-}
-
-.impact-ring {
-  position: absolute;
-  border-radius: 50%;
-  border: 3px solid;
-  transform: translate(-50%, -50%) scale(0.2);
-  animation: impact-ring 0.55s cubic-bezier(0.1, 0.8, 0.3, 1) forwards;
-  pointer-events: none;
-}
-
-@keyframes impact-ring {
-  0% { transform: translate(-50%, -50%) scale(0.25); opacity: 1; border-width: 5px; }
-  100% { transform: translate(-50%, -50%) scale(2.5); opacity: 0; border-width: 1px; }
-}
-
-.shard {
-  position: absolute;
-  border-radius: 2px;
-  transform: translate(-50%, -50%);
-  animation: shard-fly 0.6s cubic-bezier(0.15, 0.8, 0.3, 1) forwards;
-  pointer-events: none;
-}
-
-@keyframes shard-fly {
-  0% { transform: translate(-50%, -50%) scale(1) rotate(0); opacity: 1; }
-  100% {
-    transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(0.3) rotate(var(--rot));
-    opacity: 0;
-  }
-}
-
-.beam {
-  position: absolute;
-  pointer-events: none;
-  mix-blend-mode: screen;
-  filter: blur(0.4px) drop-shadow(0 0 10px rgba(255, 255, 255, 0.8));
-  animation: beam-flash 0.52s ease-out forwards;
-}
-
-.beam-row {
-  transform: translateY(-50%) scaleX(0.05);
-}
-
-.beam-col {
-  transform: translateX(-50%) scaleY(0.05);
-}
-
-@keyframes beam-flash {
-  0% { opacity: 0; }
-  20% { opacity: 1; }
-  100% { opacity: 0; }
-}
-
-.beam-row { animation-name: beam-row-flash; }
-.beam-col { animation-name: beam-col-flash; }
-
-@keyframes beam-row-flash {
-  0% { transform: translateY(-50%) scaleX(0.05); opacity: 0; }
-  25% { transform: translateY(-50%) scaleX(1); opacity: 1; }
-  100% { transform: translateY(-50%) scaleX(1.1); opacity: 0; }
-}
-
-@keyframes beam-col-flash {
-  0% { transform: translateX(-50%) scaleY(0.05); opacity: 0; }
-  25% { transform: translateX(-50%) scaleY(1); opacity: 1; }
-  100% { transform: translateX(-50%) scaleY(1.1); opacity: 0; }
-}
-
-.special-burst {
-  position: absolute;
-  width: 2.2rem;
-  height: 2.2rem;
-  border: 4px solid;
-  border-radius: 50%;
-  transform: translate(-50%, -50%) scale(0.2);
-  box-shadow: 0 0 20px 6px rgba(255, 255, 255, 0.55);
-  animation: special-burst 0.6s cubic-bezier(0.1, 0.8, 0.3, 1) forwards;
-  pointer-events: none;
-}
-
-@keyframes special-burst {
-  0% { transform: translate(-50%, -50%) scale(0.2) rotate(0); opacity: 1; }
-  60% { transform: translate(-50%, -50%) scale(1.6) rotate(120deg); opacity: 0.9; }
-  100% { transform: translate(-50%, -50%) scale(2.6) rotate(220deg); opacity: 0; }
 }
 
 .float-score {
@@ -1228,7 +1091,7 @@ body {
   position: fixed;
   inset: 0;
   background: var(--bg-overlay);
-  backdrop-filter: blur(5px);
+  /* 使用纯色遮罩替代 backdrop-filter，避免打开弹窗时的合成开销。 */
   display: grid;
   place-items: center;
   z-index: 50;

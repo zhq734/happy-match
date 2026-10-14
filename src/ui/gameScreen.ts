@@ -236,16 +236,17 @@ export class GameScreen {
     audio.play(result.combo ? 'combo' : 'swap');
     if (result.events.length > 0) {
       const maxCascade = Math.max(...result.events.map((e) => e.cascade));
-      window.setTimeout(() => audio.play('match', maxCascade), 160);
+      window.setTimeout(() => audio.play('match', maxCascade), 120);
       if (result.events.some((e) => e.created.length > 0 || e.activated.length > 0)) {
-        window.setTimeout(() => audio.play('special'), 240);
+        window.setTimeout(() => audio.play('special'), 200);
       }
       if (maxCascade >= 3) {
-        window.setTimeout(() => audio.play('combo'), 300);
+        window.setTimeout(() => audio.play('combo'), 260);
       }
     }
+    // 先刷新目标进度，再在动画期间刷新 HUD，避免结算瞬间集中触发样式计算。
     this.refreshObjectives();
-    this.refreshHud();
+    window.setTimeout(() => this.refreshHud(), 0);
     return {
       valid: true,
       events: result.events,
@@ -259,11 +260,17 @@ export class GameScreen {
     this.hudScore.textContent = String(this.session.board.score);
     if (Number.isFinite(this.session.movesLeft)) {
       this.hudMoves.textContent = String(this.session.movesLeft);
-      this.hudMoves.classList.toggle('danger', this.session.movesLeft <= 3);
+      const danger = this.session.movesLeft <= 3;
+      if (this.hudMoves.classList.contains('danger') !== danger) {
+        this.hudMoves.classList.toggle('danger', danger);
+      }
     }
     if (Number.isFinite(this.session.timeLeft)) {
       this.hudTime.textContent = String(Math.ceil(this.session.timeLeft));
-      this.hudTime.classList.toggle('danger', this.session.timeLeft <= 10);
+      const danger = this.session.timeLeft <= 10;
+      if (this.hudTime.classList.contains('danger') !== danger) {
+        this.hudTime.classList.toggle('danger', danger);
+      }
     }
     this.hudCombo.textContent = String(Math.max(1, this.session.board.maxCascade));
   }
@@ -271,10 +278,22 @@ export class GameScreen {
   /** 刷新目标进度。 */
   private refreshObjectives(): void {
     const progress = this.session.progress();
-    clear(this.objectivesBox);
-    for (const p of progress) {
-      this.objectivesBox.appendChild(this.objectiveNode(p));
+    // 目标数量通常很少且结构稳定，原地更新可避免每步重建 DOM。
+    if (this.objectivesBox.childElementCount !== progress.length) {
+      clear(this.objectivesBox);
+      for (const p of progress) this.objectivesBox.appendChild(this.objectiveNode(p));
+      return;
     }
+    progress.forEach((p, index) => {
+      const node = this.objectivesBox.children[index] as HTMLElement;
+      const ratio = p.target > 0 ? Math.min(1, p.current / p.target) : 0;
+      const count = node.querySelector<HTMLElement>('.obj-count');
+      const current = count?.firstElementChild as HTMLElement | null;
+      const fill = node.querySelector<HTMLElement>('.progress-fill');
+      if (current) current.textContent = String(p.current);
+      if (fill) fill.style.width = `${ratio * 100}%`;
+      node.classList.toggle('done', p.done);
+    });
   }
 
   /**

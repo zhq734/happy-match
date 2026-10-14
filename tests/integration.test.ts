@@ -54,6 +54,25 @@ function installStubs(): void {
   Element.prototype.setPointerCapture = () => {};
   Element.prototype.releasePointerCapture = () => {};
   Element.prototype.hasPointerCapture = () => false;
+  // jsdom 不实现 canvas 2D，桩一个最小上下文，避免特效绘制产生告警。
+  Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', {
+    configurable: true,
+    value: () => ({
+      save: () => {},
+      restore: () => {},
+      clearRect: () => {},
+      beginPath: () => {},
+      arc: () => {},
+      fill: () => {},
+      stroke: () => {},
+      fillRect: () => {},
+      translate: () => {},
+      rotate: () => {},
+      createRadialGradient: () => ({ addColorStop: () => {} }),
+      createLinearGradient: () => ({ addColorStop: () => {} }),
+      setTransform: () => {},
+    }),
+  });
 }
 
 /**

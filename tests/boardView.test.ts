@@ -14,6 +14,28 @@ function stubSize(node: HTMLElement, width: number, height: number): void {
 }
 
 describe('BoardView 自适应与特效', () => {
+  beforeEach(() => {
+    // jsdom 默认不实现 canvas 2D，桩一个最小上下文以验证粒子系统。
+    Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', {
+      configurable: true,
+      value: () => ({
+        save: () => {},
+        restore: () => {},
+        clearRect: () => {},
+        beginPath: () => {},
+        arc: () => {},
+        fill: () => {},
+        stroke: () => {},
+        fillRect: () => {},
+        translate: () => {},
+        rotate: () => {},
+        createRadialGradient: () => ({ addColorStop: () => {} }),
+        createLinearGradient: () => ({ addColorStop: () => {} }),
+        setTransform: () => {},
+      }),
+    });
+  });
+
   it('按照外部可用容器放大棋盘，而不是被棋盘自身尺寸限制', () => {
     const measure = document.createElement('div');
     stubSize(measure, 900, 760);
@@ -32,7 +54,7 @@ describe('BoardView 自适应与特效', () => {
     measure.remove();
   });
 
-  it('消除时生成冲击波、闪光、碎片与粒子特效', () => {
+  it('消除时使用 Canvas 粒子绘制特效，避免大量 DOM 节点造成卡顿', () => {
     const measure = document.createElement('div');
     stubSize(measure, 700, 700);
     document.body.appendChild(measure);
@@ -46,16 +68,16 @@ describe('BoardView 自适应与特效', () => {
 
     view.impactAt(3, 4, 'var(--candy-0)', 'none', 8);
 
-    expect(view.root.querySelectorAll('.impact-ring').length).toBeGreaterThan(0);
-    expect(view.root.querySelectorAll('.impact-flash').length).toBeGreaterThan(0);
-    expect(view.root.querySelectorAll('.shard').length).toBeGreaterThan(0);
-    expect(view.root.querySelectorAll('.spark').length).toBeGreaterThan(0);
+    expect(view.root.querySelector('canvas.fx-canvas')).not.toBeNull();
+    expect(view.fxParticleCount).toBeGreaterThan(0);
+    // 特效不应再以大量 DOM 节点的形式存在。
+    expect(view.root.querySelectorAll('.spark, .shard, .impact-ring, .impact-flash').length).toBe(0);
 
     view.destroy();
     measure.remove();
   });
 
-  it('条纹糖激活时生成贯穿棋盘的光束特效', () => {
+  it('条纹糖激活时生成贯穿棋盘的 Canvas 光束粒子', () => {
     const measure = document.createElement('div');
     stubSize(measure, 700, 700);
     document.body.appendChild(measure);
@@ -67,13 +89,31 @@ describe('BoardView 自适应与特效', () => {
       measure,
     );
 
+    const before = view.fxParticleCount;
     view.beamAt(2, 5, 'row', 'var(--candy-4)');
-    expect(view.root.querySelectorAll('.beam-row').length).toBe(1);
-
-    view.beamAt(2, 5, 'col', 'var(--candy-4)');
-    expect(view.root.querySelectorAll('.beam-col').length).toBe(1);
+    expect(view.fxParticleCount).toBeGreaterThan(before);
+    expect(view.root.querySelectorAll('.beam').length).toBe(0);
 
     view.destroy();
+    measure.remove();
+  });
+
+  it('销毁视图后停止特效循环并清空粒子', () => {
+    const measure = document.createElement('div');
+    stubSize(measure, 700, 700);
+    document.body.appendChild(measure);
+
+    const board = makeBoard(makeLevel(8, 8));
+    const view = new BoardView(
+      board,
+      () => ({ valid: false, events: [], gained: 0, combo: false }),
+      measure,
+    );
+    view.impactAt(1, 1, 'var(--candy-1)', 'none', 6);
+    expect(view.fxParticleCount).toBeGreaterThan(0);
+
+    view.destroy();
+    expect(view.fxParticleCount).toBe(0);
     measure.remove();
   });
 });
